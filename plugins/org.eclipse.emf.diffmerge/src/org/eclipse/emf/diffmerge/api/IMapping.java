@@ -22,9 +22,8 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature.Setting;
 
 
-
 /**
- * A mapping between model scopes which is such that every element
+ * A mapping between model scopes which is such that every element of either scope
  * is mapped at most once.
  * A mapping is defined as a set of IMatch.
  * @author Olivier Constant
@@ -48,6 +47,7 @@ public interface IMapping {
    * Return the formerly partial matches which have been completed
    * by addition in the given role
    * Postcondition: for every match m in the result, !m.isPartial()
+   * @see IMatch#isPartial()
    * @param destinationRole_p a role which is TARGET or REFERENCE
    * @return a non-null, potentially empty, unmodifiable collection
    */
@@ -185,6 +185,11 @@ public interface IMapping {
     void crossReference(Role role_p);
     
     /**
+     * @see org.eclipse.emf.diffmerge.api.IMapping#getComparison()
+     */
+    IComparison.Editable getComparison();
+    
+    /**
      * Return a modifiable collection of the formerly partial matches
      * which have been completed by addition in the given role
      * Class invariant: for every role in {TARGET, REFERENCE},
@@ -202,31 +207,26 @@ public interface IMapping {
     Collection<? extends IMatch> getModifiableContents();
     
     /**
-     * Return the match map corresponding to the given role
-     * @param role_p a non-null role
-     * @return a non-null, potentially empty, modifiable map
-     */
-    EMap<EObject, IMatch> getModifiableMatchMap(Role role_p);
-    
-    /**
      * Map the given element from the given role to no other element.
+     * If a match for the given element is already present, it is removed
+     * to enforce consistency.
      * @param element_p a non-null element playing role role_p
      * @param role_p a non-null role
-     * @return the corresponding Match element as registered in this mapping
+     * @return the non-null new match
      */
-    IMatch map(EObject element_p, Role role_p);
+    IMatch.Editable map(EObject element_p, Role role_p);
     
     /**
      * Map the given elements from the given roles, reusing existing matches
-     * if possible.
-     * Potential incompatible matches are removed so consistency is enforced.
+     * when possible, and return whether a contradiction has been detected.
+     * Redundant and contradicting matches are removed to enforce consistency.
      * @param element1_p a potentially null element playing role role1_p
      * @param role1_p a non-null role
      * @param element2_p a potentially null element playing role role2_p
      * @param role2_p a non-null role which is different from role1_p
-     * @return the corresponding Match element as registered in this mapping
+     * @return true if a contradicting match existed before, false otherwise
      */
-    IMatch mapIncrementally(EObject element1_p, Role role1_p,
+    boolean mapIncrementally(EObject element1_p, Role role1_p,
         EObject element2_p, Role role2_p);
   }
   

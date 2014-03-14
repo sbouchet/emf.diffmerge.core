@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feature
       id="org.eclipse.emf.diffmerge.sdk.feature"
-      label="EMF Diff/Merge SDK Feature"
-      version="0.1.0.qualifier"
-      provider-name="Thales Global Services S.A.S.">
+      label="EMF Diff/Merge SDK Feature (Incubation)"
+      version="0.3.0.qualifier"
+      provider-name="Eclipse Modeling Project">
 
    <description>
-      EMF Diff/Merge SDK Feature
+      A diff/merge tool for models. Its main purpose is to help build higher-level tools that need to merge models based on consistency rules. GUI components are also provided. Typical usages include model refactoring, iterative model transformations, bridges between models or modeling tools, collaborative modeling environments, or versioning systems.
    </description>
 
    <copyright>
@@ -21,10 +21,9 @@ http://www.eclipse.org/legal/epl-v10.html
       %license
    </license>
 
-    <includes
-        id="org.eclipse.emf.diffmerge.sdk.source.feature"
-        version="0.0.0"
-    />     
+   <includes
+         id="org.eclipse.emf.diffmerge.sdk.source.feature"
+         version="0.0.0"/>
 
    <plugin
          id="org.eclipse.emf.diffmerge"

@@ -31,14 +31,14 @@ import org.eclipse.emf.diffmerge.api.diff.IMergeableDifference;
 import org.eclipse.emf.diffmerge.api.diff.IPresenceDifference;
 import org.eclipse.emf.diffmerge.api.diff.IReferenceValuePresence;
 import org.eclipse.emf.diffmerge.impl.helpers.AbstractExpensiveOperation;
-import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin;
-import org.eclipse.emf.diffmerge.ui.Messages;
 import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin.DifferenceColorKind;
 import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin.ImageID;
+import org.eclipse.emf.diffmerge.ui.Messages;
 import org.eclipse.emf.diffmerge.ui.util.DelegatingLabelProvider;
 import org.eclipse.emf.diffmerge.ui.util.DiffMergeLabelProvider;
 import org.eclipse.emf.diffmerge.util.structures.FHashMap;
 import org.eclipse.emf.diffmerge.util.structures.FHashSet;
+import org.eclipse.jface.viewers.ILabelProvider;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.ITreeContentProvider;
 import org.eclipse.jface.viewers.TreeViewer;
@@ -56,7 +56,6 @@ import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Shell;
 
 
-
 /**
  * A viewer for showing the impact of a merge.
  * Input: MergeImpactViewer.Input ; Elements: IDifference.
@@ -69,14 +68,11 @@ public class MergeImpactViewer extends Viewer {
    */
   public static class ImpactInput {
     
-    /** The non-null direction of the merge (TARGET or REFERENCE) */
-    private final Role _destination;
-    
     /** Whether modifications occur on the left-hand side or the right-hand side */
     private final boolean _sideIsLeft;
     
-    /** Whether the comparison is 3-way */
-    private final boolean _isThreeWay;
+    /** The non-null comparison context */
+    private final EMFDiffNode _context_p;
     
     /** The non-null, unmodifiable, potentially empty set of differences to merge */
     private final Collection<IDifference> _toMerge;
@@ -165,16 +161,14 @@ public class MergeImpactViewer extends Viewer {
     /**
      * Constructor
      * @param toMerge_p the non-null set of differences to merge
-     * @param destination_p the non-null destination of the merge (TARGET or REFERENCE)
-     * @param sideIsLeft_p whether modifications occur on the left-hand side or the right-hand side
-     * @param isThreeWay_p whether the comparison is 3-way
+     * @param toLeft_p whether modifications occur on the left-hand side or the right-hand side
+     * @param context_p the non-null comparison context
      */
-    public ImpactInput(Collection<? extends IDifference> toMerge_p, Role destination_p,
-        boolean sideIsLeft_p, boolean isThreeWay_p) {
+    public ImpactInput(Collection<? extends IDifference> toMerge_p, boolean toLeft_p,
+        EMFDiffNode context_p) {
       _toMerge = new FHashSet<IDifference>(toMerge_p, null);
-      _destination = destination_p;
-      _sideIsLeft = sideIsLeft_p;
-      _isThreeWay = isThreeWay_p;
+      _sideIsLeft = toLeft_p;
+      _context_p = context_p;
       _isComputed = false;
       _explicitImpact = new FHashMap<IMatch, Collection<IDifference>>();
       _implicitImpact = new FHashMap<IMatch, Collection<IDifference>>();
@@ -191,11 +185,19 @@ public class MergeImpactViewer extends Viewer {
     }
     
     /**
+     * Return the comparison context for this input
+     * @return a non-null object
+     */
+    public EMFDiffNode getContext() {
+      return _context_p;
+    }
+    
+    /**
      * Return the destination of the merge
      * @return a non-null role which is TARGET or REFERENCE
      */
     public Role getDestination() {
-      return _destination;
+      return _context_p.getRoleForSide(_sideIsLeft);
     }
     
     /**
@@ -233,7 +235,7 @@ public class MergeImpactViewer extends Viewer {
      * Return whether the comparison is 3-way
      */
     public boolean isThreeWay() {
-      return _isThreeWay;
+      return _context_p.getActualComparison().isThreeWay();
     }
   }
   
@@ -376,6 +378,14 @@ public class MergeImpactViewer extends Viewer {
   public void refresh() {
     _upperViewer.refresh();
     _lowerViewer.refresh();
+  }
+  
+  /**
+   * Set the "base" label provider for representing model elements
+   * @param labelProvider_p a potentially null label provider, where null stands for default
+   */
+  public void setDelegateLabelProvider(ILabelProvider labelProvider_p) {
+    ((DelegatingLabelProvider)_upperViewer.getLabelProvider()).setDelegate(labelProvider_p); // Same on both viewers
   }
   
   /**
@@ -543,7 +553,7 @@ public class MergeImpactViewer extends Viewer {
      * @see org.eclipse.emf.diffmerge.ui.util.DelegatingLabelProvider#getDelegate()
      */
     @Override
-    protected DiffMergeLabelProvider getDelegate() {
+    public DiffMergeLabelProvider getDelegate() {
       return (DiffMergeLabelProvider)super.getDelegate();
     }
     
@@ -558,7 +568,7 @@ public class MergeImpactViewer extends Viewer {
       else
         result = getInput().isOnTheLeft()? DifferenceColorKind.LEFT:
           DifferenceColorKind.RIGHT;
-      return EMFDiffMergeUIPlugin.getDefault().getDifferenceColor(result);
+      return getInput().getContext().getDifferenceColor(result);
     }
     
     /**

@@ -38,22 +38,12 @@ public final class ModelImplUtil {
   }
   
   /**
-   * Copy the XML ID from the given source to the given target element
-   * if applicable
-   * @param source_p a non-null element
-   * @param target_p a non-null element
-   * @return whether the ID was actually copied
-   */
-  public static boolean copyXmlId(EObject source_p, EObject target_p) {
-    return ModelImplUtil.setXmlId(target_p, getXmlId(source_p));
-  }
-  
-  /**
-   * Return the ID of the given element as defined by its ID Attribute, or null if none
+   * Return the intrinsic ID of the given element as defined by its ID attribute, or null if none
+   * @see EcoreUtil#getID(EObject)
    * @param element_p a potentially null element
    * @return a potentially null String
    */
-  public static String getEcoreId(EObject element_p) {
+  public static String getIntrinsicID(EObject element_p) {
     String result = null;
     if (element_p != null)
       result = EcoreUtil.getID(element_p);
@@ -61,24 +51,11 @@ public final class ModelImplUtil {
   }
   
   /**
-   * Return the URI fragment of the given element in its resource, if any.
-   * @param element_p a non-null element
-   * @return a potentially null string
-   */
-  public static String getUriFragment(EObject element_p) {
-    String result = null;
-    Resource resource = element_p.eResource();
-    if (resource != null)
-      result = resource.getURIFragment(element_p);
-    return result;
-  }
-  
-  /**
-   * Return the XML ID of the given element, or null if none
+   * Return the (extrinsic) XML ID of the given element, or null if none
    * @param element_p a potentially null element
    * @return a potentially null String
    */
-  public static String getXmlId(EObject element_p) {
+  public static String getXMLID(EObject element_p) {
     String result = null;
     if (element_p != null && element_p.eResource() instanceof XMLResource)
       result = ((XMLResource)element_p.eResource()).getID(element_p);
@@ -139,13 +116,13 @@ public final class ModelImplUtil {
   }
   
   /**
-   * Set the ID of the given element as defined by its ID Attribute, if applicable and if it does
-   * not break ID uniqueness
+   * Set the intrinsic ID of the given element as defined by its ID Attribute, if applicable
+   * and if it does not break ID uniqueness, otherwise do nothing
    * @param element_p a non-null element
    * @param id_p a non-null ID
    * @return whether the ID was actually set
    */
-  public static boolean setEcoreId(EObject element_p, String id_p) {
+  public static boolean setIntrinsicID(EObject element_p, String id_p) {
     assert element_p != null && id_p != null;
     boolean result = false;
     if (element_p.eClass().getEIDAttribute() != null &&
@@ -158,13 +135,13 @@ public final class ModelImplUtil {
   }
   
   /**
-   * Set the XML ID of the given element if applicable and if it does
+   * Set the (extrinsic) XML ID of the given element if applicable and if it does
    * not break ID uniqueness
    * @param element_p a non-null element
    * @param id_p a potentially null ID
    * @return whether the ID was actually set
    */
-  public static boolean setXmlId(EObject element_p, String id_p) {
+  public static boolean setXMLID(EObject element_p, String id_p) {
     assert element_p != null;
     boolean result = false;
     if (id_p != null && element_p.eResource() instanceof XMLResource) {

@@ -22,14 +22,17 @@ import java.util.Set;
 import org.eclipse.compare.CompareUI;
 import org.eclipse.core.runtime.FileLocator;
 import org.eclipse.emf.common.util.Logger;
+import org.eclipse.emf.diffmerge.api.Role;
 import org.eclipse.emf.diffmerge.ui.log.DiffMergeLogger;
+import org.eclipse.emf.diffmerge.ui.setup.ComparisonSetupManager;
 import org.eclipse.emf.diffmerge.ui.util.DifferenceKind;
-import org.eclipse.emf.diffmerge.ui.util.UIUtil;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.edit.provider.ComposedAdapterFactory;
+import org.eclipse.emf.edit.ui.provider.AdapterFactoryLabelProvider;
 import org.eclipse.jface.resource.ImageDescriptor;
-import org.eclipse.swt.SWT;
+import org.eclipse.jface.resource.ImageRegistry;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.widgets.Display;
@@ -37,7 +40,6 @@ import org.eclipse.ui.ISharedImages;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
-
 
 
 /**
@@ -54,9 +56,9 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
     CHECKIN_ACTION, CHECKOUT_ACTION, COLLAPSEALL, CONFLICT_STAT, CONTAINER, DELETE, DONE, DOWN,
     EMPTY, EXPANDALL, INC_STAT, INC_ADD_STAT, INC_REM_STAT, LEFT, LOCK, MODIFIED_STAT,
     NEXT_CHANGE_NAV, NEXT_DIFF_NAV, OUT_STAT, OUT_ADD_STAT, OUT_REM_STAT, PLUS, PREV_CHANGE_NAV,
-    PREV_DIFF_NAV, REDO, RIGHT, SHOW, SORT, SWAP, SYNCED, UNDO, UP, VIEW_MENU }
+    PREV_DIFF_NAV, REDO, RIGHT, SHOW, SORT, SWAP, SYNCED, UNDO, UP, VIEW_MENU, WARNING }
   
-  /** Identifiers for the side to which a difference presence is relative */
+  /** Identifiers for colors according to the side to which a difference presence is relative */
   public static enum DifferenceColorKind {
     LEFT, RIGHT, BOTH, NONE, CONFLICT, DEFAULT
   }
@@ -68,10 +70,10 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
   public static final String LABEL = Messages.EMFDiffMergeUIPlugin_Label;
   
 	/** The shared instance */
-	private static EMFDiffMergeUIPlugin plugin;
+	private static EMFDiffMergeUIPlugin __plugin;
 	
 	/** The manager for comparison contexts */
-	private final ComparisonContextManager _comparisonContextManager;
+	private final ComparisonSetupManager _comparisonSetupManager;
 	
 	/** The logger for diff/merge events */
 	private final DiffMergeLogger _diffMergeLogger;
@@ -82,27 +84,34 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
   /** The "very dark gray" non-system color (initially null) */
   private Color _veryDarkGray;
   
+  /** A label provider based on the registered .edit plugins (initially null) */
+  private AdapterFactoryLabelProvider _composedAdapterFactoryLabelProvider;
+  
 	
 	/**
 	 * Constructor
 	 */
 	public EMFDiffMergeUIPlugin() {
 	  _diffMergeLogger = new DiffMergeLogger();
-	  _comparisonContextManager = new ComparisonContextManager();
+	  _comparisonSetupManager = new ComparisonSetupManager();
 	  _ownershipFeature = EcoreFactory.eINSTANCE.createEReference();
 	  _ownershipFeature.setName("container"); //$NON-NLS-1$
 	  _ownershipFeature.setEType(EcorePackage.eINSTANCE.getEObject());
     _ownershipFeature.setLowerBound(0);
 	  _ownershipFeature.setUpperBound(1);
 	  _veryDarkGray = null;
+	  _composedAdapterFactoryLabelProvider = null;
 	}
 	
 	/**
-	 * Return the comparison context manager
-	 * @return a non-null ComparisonContextManager
+	 * Return a label provider based on the registered .edit plugins
+	 * @return a non-null object
 	 */
-	public ComparisonContextManager getContextManager() {
-	  return _comparisonContextManager;
+	public AdapterFactoryLabelProvider getAdapterFactoryLabelProvider() {
+	  if (_composedAdapterFactoryLabelProvider == null)
+	    _composedAdapterFactoryLabelProvider = new AdapterFactoryLabelProvider(
+	        new ComposedAdapterFactory(ComposedAdapterFactory.Descriptor.Registry.INSTANCE));
+	  return _composedAdapterFactoryLabelProvider;
 	}
 	
   /**
@@ -110,31 +119,15 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
    * @return a non-null object
    */
   public static EMFDiffMergeUIPlugin getDefault() {
-    return plugin;
+    return __plugin;
   }
   
   /**
-   * Return the color that corresponds to the given color kind
-   * @param colorKind_p a non-null color kind
-   * @return a non-null color
+   * Return the default role for the left-hand side in a comparison
+   * @return a non-null role which is TARGET or REFERENCE
    */
-  public Color getDifferenceColor(DifferenceColorKind colorKind_p) {
-    int colorCode;
-    switch (colorKind_p) {
-      case LEFT:
-        colorCode = SWT.COLOR_DARK_RED; break;
-      case RIGHT:
-        colorCode = SWT.COLOR_BLUE; break;
-      case BOTH:
-        colorCode = SWT.COLOR_DARK_MAGENTA; break;
-      case NONE:
-        colorCode = SWT.COLOR_GRAY; break;
-      case CONFLICT:
-        colorCode = SWT.COLOR_RED; break;
-      default:
-        colorCode = SWT.COLOR_BLACK; break;
-    }
-    return UIUtil.getColor(colorCode);
+  public Role getDefaultLeftRole() {
+    return Role.TARGET;
   }
   
   /**
@@ -152,11 +145,11 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
           result = DifferenceColorKind.NONE; break;
         case CONFLICT:
           result = DifferenceColorKind.CONFLICT; break;
-        case MODIFIED: case FROM_BOTH:
+        case MODIFIED: case FROM_LEFT: case FROM_RIGHT: case FROM_BOTH:
           result = DifferenceColorKind.BOTH; break;
-        case FROM_LEFT: case FROM_LEFT_ADD: case FROM_RIGHT_DEL:
+        case FROM_LEFT_ADD: case FROM_RIGHT_DEL:
           result = DifferenceColorKind.LEFT; break;
-        case FROM_RIGHT: case FROM_RIGHT_ADD: case FROM_LEFT_DEL:
+        case FROM_RIGHT_ADD: case FROM_LEFT_DEL:
           result = DifferenceColorKind.RIGHT; break;
         default:
           result = DifferenceColorKind.DEFAULT; break;
@@ -205,23 +198,23 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
     String result;
     switch (originKind_p) {
       case FROM_LEFT:
-        result = "±› "; break; //$NON-NLS-1$
+        result = "|> "; break; //$NON-NLS-1$
       case FROM_LEFT_ADD:
-        result = "+› "; break; //$NON-NLS-1$
+        result = "+> "; break; //$NON-NLS-1$
       case FROM_LEFT_DEL:
-        result = "-› "; break; //$NON-NLS-1$
+        result = "-> "; break; //$NON-NLS-1$
       case FROM_RIGHT:
-        result = "‹± "; break; //$NON-NLS-1$
+        result = "<| "; break; //$NON-NLS-1$
       case FROM_RIGHT_ADD:
-        result = "‹+ "; break; //$NON-NLS-1$
+        result = "<+ "; break; //$NON-NLS-1$
       case FROM_RIGHT_DEL:
-        result = "‹- "; break; //$NON-NLS-1$
+        result = "<- "; break; //$NON-NLS-1$
       case CONFLICT:
         result = "! "; break; //$NON-NLS-1$
       case FROM_BOTH:
-        result = "‹› "; break; //$NON-NLS-1$
+        result = "<> "; break; //$NON-NLS-1$
       case MODIFIED:
-        result = "›‹ "; break; //$NON-NLS-1$
+        result = ">< "; break; //$NON-NLS-1$
       default:
         result = ""; break; //$NON-NLS-1$
     }
@@ -268,6 +261,10 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
         result = PlatformUI.getWorkbench().getSharedImages().getImage(
             ISharedImages.IMG_TOOL_UNDO);
         break;
+      case WARNING:
+        result = PlatformUI.getWorkbench().getSharedImages().getImage(
+            ISharedImages.IMG_OBJS_WARN_TSK);
+        break;
       default:
         result = getImageRegistry().get(id_p.name());
     }
@@ -306,6 +303,10 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
         result = PlatformUI.getWorkbench().getSharedImages().getImageDescriptor(
             ISharedImages.IMG_TOOL_UNDO);
         break;
+      case WARNING:
+        result = PlatformUI.getWorkbench().getSharedImages().getImageDescriptor(
+            ISharedImages.IMG_OBJS_WARN_TSK);
+        break;
       default:
         result = getImageRegistry().getDescriptor(id_p.name());
     }
@@ -321,11 +322,19 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
   }
   
   /**
-   * Get the plug-in ID according to MANIFEST.MF definition.
+   * Get the plug-in ID according to MANIFEST.MF
    * @return a non-null String
    */
   public String getPluginId() {
     return getBundle().getSymbolicName();
+  }
+  
+  /**
+   * Return the comparison setup manager
+   * @return a non-null object
+   */
+  public ComparisonSetupManager getSetupManager() {
+    return _comparisonSetupManager;
   }
   
   /**
@@ -339,11 +348,29 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
   }
   
   /**
+   * @see org.eclipse.ui.plugin.AbstractUIPlugin#initializeImageRegistry(org.eclipse.jface.resource.ImageRegistry)
+   */
+  @Override
+  protected void initializeImageRegistry(ImageRegistry reg_p) {
+    super.initializeImageRegistry(reg_p);
+    reg_p.put(ImageID.UP.name(), CompareUI.DESC_CTOOL_PREV);
+    reg_p.put(ImageID.DOWN.name(), CompareUI.DESC_CTOOL_NEXT);
+    Set<ImageID> toRegister = new HashSet<EMFDiffMergeUIPlugin.ImageID>(
+        Arrays.asList(ImageID.values()));
+    toRegister.removeAll(Arrays.asList(new ImageID[] {
+        ImageID.DELETE, ImageID.LEFT, ImageID.REDO, ImageID.RIGHT, ImageID.SHOW,
+        ImageID.UNDO, ImageID.DOWN, ImageID.UP, ImageID.WARNING}));
+    for (ImageID imageId : toRegister)
+      registerLocalIcon(imageId, reg_p);
+  }
+  
+  /**
    * Register and return the image descriptor obtained from the given ID of a local icon
    * @param imageID_p a non-null image ID
+   * @param reg_p the non-null image registry in which to register
    * @return a potentially null image descriptor
    */
-  private ImageDescriptor registerLocalIcon(ImageID imageID_p) {
+  private ImageDescriptor registerLocalIcon(ImageID imageID_p, ImageRegistry reg_p) {
     ImageDescriptor result = null;
     String path = ICON_PATH + imageID_p.name().toLowerCase() + ".gif"; //$NON-NLS-1$
     try {
@@ -353,7 +380,7 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
       // Nothing needed
     }
     if (result != null)
-      getImageRegistry().put(imageID_p.name(), result);
+      reg_p.put(imageID_p.name(), result);
     return result;
   }
   
@@ -361,31 +388,23 @@ public class EMFDiffMergeUIPlugin extends AbstractUIPlugin {
 	 * @see org.eclipse.ui.plugin.AbstractUIPlugin#start(org.osgi.framework.BundleContext)
 	 */
 	@Override
-	public void start(BundleContext context) throws Exception {
-		super.start(context);
-		plugin = this;
-		getImageRegistry().put(ImageID.UP.name(), CompareUI.DESC_CTOOL_PREV);
-    getImageRegistry().put(ImageID.DOWN.name(), CompareUI.DESC_CTOOL_NEXT);
-    Set<ImageID> toRegister = new HashSet<EMFDiffMergeUIPlugin.ImageID>(
-        Arrays.asList(ImageID.values()));
-    toRegister.removeAll(Arrays.asList(
-        new ImageID[] { ImageID.DELETE, ImageID.LEFT, ImageID.REDO, ImageID.RIGHT, ImageID.SHOW,
-                        ImageID.UNDO, ImageID.DOWN, ImageID.UP}));
-    for (ImageID imageId : toRegister) {
-      registerLocalIcon(imageId);
-    }
+	public void start(BundleContext context_p) throws Exception {
+		super.start(context_p);
+		__plugin = this;
 	}
 	
 	/**
 	 * @see org.eclipse.ui.plugin.AbstractUIPlugin#stop(org.osgi.framework.BundleContext)
 	 */
 	@Override
-	public void stop(BundleContext context) throws Exception {
+	public void stop(BundleContext context_p) throws Exception {
 	  _diffMergeLogger.close();
 	  if (_veryDarkGray != null)
 	    _veryDarkGray.dispose();
-		plugin = null;
-		super.stop(context);
+	  if (_composedAdapterFactoryLabelProvider != null)
+	    _composedAdapterFactoryLabelProvider.dispose();
+		__plugin = null;
+		super.stop(context_p);
 	}
 	
 }

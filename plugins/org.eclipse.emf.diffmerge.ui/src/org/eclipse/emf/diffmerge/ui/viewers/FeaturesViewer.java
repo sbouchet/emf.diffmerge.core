@@ -48,20 +48,19 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 
 
-
 /**
  * A viewer which provides a representation of the features of a match.
- * Input: FeatureViewer.Input ; Elements: EStructuralFeature.
+ * Input: FeatureViewer.FeaturesInput ; Elements: EStructuralFeature.
  * @author Olivier Constant
  */
 public class FeaturesViewer extends TableViewer {
   
   /**
-   * A simple structure for defining inputs
+   * A simple structure for defining inputs for this viewer.
    */
   public static class FeaturesInput {
     /** The non-null comparison context */
-    private final ModelComparisonDiffNode _context;
+    private final EMFDiffNode _context;
     /** The non-null specific part */
     private final IMatch _match;
     /**
@@ -69,8 +68,7 @@ public class FeaturesViewer extends TableViewer {
      * @param context_p a non-null object
      * @param match_p a non-null object
      */
-    public FeaturesInput(ModelComparisonDiffNode context_p,
-        IMatch match_p) {
+    public FeaturesInput(EMFDiffNode context_p, IMatch match_p) {
       _context = context_p;
       _match = match_p;
     }
@@ -91,7 +89,7 @@ public class FeaturesViewer extends TableViewer {
      * Return the comparison context
      * @return a non-null object
      */
-    public ModelComparisonDiffNode getContext() {
+    public EMFDiffNode getContext() {
       return _context;
     }
     /**
@@ -110,9 +108,6 @@ public class FeaturesViewer extends TableViewer {
     }
   }
   
-  
-  /** The non-null role that drives the representation */
-  protected Role _drivingRole;
   
   /** Whether all features must be shown, including those with no difference */
   private boolean _showAllFeatures;
@@ -133,7 +128,6 @@ public class FeaturesViewer extends TableViewer {
    */
   public FeaturesViewer(Composite parent_p, int style_p) {
     super(parent_p, style_p);
-    _drivingRole = Role.TARGET;
     setContentProvider(new ContentProvider());
     setLabelProvider(new LabelProvider());
     _showAllFeatures = false;
@@ -173,14 +167,6 @@ public class FeaturesViewer extends TableViewer {
   }
   
   /**
-   * Set the role that drives the representation
-   * @param role_p a non-null role
-   */
-  public void setDrivingRole(Role role_p) {
-    _drivingRole = role_p;
-  }
-  
-  /**
    * Set whether all features must be shown, including those which hold no difference
    * @param show_p whether all features must be shown
    */
@@ -203,15 +189,16 @@ public class FeaturesViewer extends TableViewer {
      * @return a non-null, potentially empty, modifiable list
      */
     private List<EStructuralFeature> getAllFeatures(IMatch match_p) {
-      EObject element = match_p.get(_drivingRole);
+      Role drivingRole = getInput().getContext().getDrivingRole();
+      EObject element = match_p.get(drivingRole);
       if (element == null)
-        element = match_p.get(_drivingRole.opposite());
+        element = match_p.get(drivingRole.opposite());
       assert element != null; // An IMatch may not have null elements for both roles
       EClass eClass = element.eClass();
       List<EStructuralFeature> result = new ArrayList<EStructuralFeature>();
       result.addAll(eClass.getEAllAttributes());
       for (EReference ref : eClass.getEAllReferences()) {
-        if (qualifies(ref) || match_p.getOrderDifference(ref, _drivingRole) != null)
+        if (qualifies(ref) || match_p.getOrderDifference(ref, drivingRole) != null)
           result.add(ref);
       }
       return result;
@@ -221,6 +208,7 @@ public class FeaturesViewer extends TableViewer {
      * @see org.eclipse.jface.viewers.IStructuredContentProvider#getElements(java.lang.Object)
      */
     public Object[] getElements(Object inputElement_p) {
+      Role drivingRole = getInput().getContext().getDrivingRole();
       IMatch match = ((FeaturesInput)inputElement_p).getMatch();
       List<EStructuralFeature> result;
       if (mustShowAllFeatures())
@@ -228,7 +216,7 @@ public class FeaturesViewer extends TableViewer {
       else {
         result = new ArrayList<EStructuralFeature>(match.getAttributesWithDifferences());
         for (EReference ref : match.getReferencesWithDifferences()) {
-          if (!ref.isContainment() || match.getOrderDifference(ref, _drivingRole) != null)
+          if (!ref.isContainment() || match.getOrderDifference(ref, drivingRole) != null)
             result.add(ref);
         }
       }
@@ -258,7 +246,7 @@ public class FeaturesViewer extends TableViewer {
     private boolean qualifies(EReference reference_p) {
       return isOwnershipFeature(reference_p) ||
         !reference_p.isContainment() && !reference_p.isContainer() &&
-        reference_p.isChangeable() && !reference_p.isDerived() && !reference_p.isTransient();
+        reference_p.isChangeable() && !reference_p.isDerived();
     }
   }
   
@@ -324,7 +312,9 @@ public class FeaturesViewer extends TableViewer {
       EStructuralFeature feature = (EStructuralFeature)element_p;
       DifferenceKind kind = getDifferenceKind(feature);
       DifferenceColorKind colorKind = EMFDiffMergeUIPlugin.getDefault().getDifferenceColorKind(kind);
-      Color result = EMFDiffMergeUIPlugin.getDefault().getDifferenceColor(colorKind);
+      if (colorKind == DifferenceColorKind.NONE)
+        colorKind = DifferenceColorKind.DEFAULT;
+      Color result = getInput().getContext().getDifferenceColor(colorKind);
       return result;
     }
     

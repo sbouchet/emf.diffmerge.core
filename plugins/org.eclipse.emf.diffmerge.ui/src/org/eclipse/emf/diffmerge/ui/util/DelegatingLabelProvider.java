@@ -14,39 +14,47 @@
  */
 package org.eclipse.emf.diffmerge.ui.util;
 
+import org.eclipse.jface.viewers.ColumnLabelProvider;
 import org.eclipse.jface.viewers.IColorProvider;
 import org.eclipse.jface.viewers.IFontProvider;
 import org.eclipse.jface.viewers.ILabelProvider;
-import org.eclipse.jface.viewers.LabelProvider;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Image;
 
 
 /**
- * A label provider that delegates to another one.
+ * A label provider supporting colors, fonts and tooltips, that delegates to
+ * another label provider for certain operations.
  * This class is intended to be sub-classed.
  * Sub-classes must define what part of the behavior diverges from the delegate.
  * @author Olivier Constant
  */
-public class DelegatingLabelProvider extends LabelProvider
-implements IFontProvider, IColorProvider {
+public class DelegatingLabelProvider extends ColumnLabelProvider {
   
   /** The non-null label provider to which behavior is delegated */
-  private final ILabelProvider _delegate;
+  private ILabelProvider _delegate;
   
   
   /**
-   * Constructor
-   * @param delegate_p the non-null label provider to which behavior is delegated
+   * Default constructor
    */
-  public DelegatingLabelProvider(ILabelProvider delegate_p) {
-    _delegate = delegate_p;
+  public DelegatingLabelProvider() {
+    this(null);
   }
   
   /**
-   * @see org.eclipse.jface.viewers.IFontProvider#getFont(java.lang.Object)
+   * Constructor
+   * @param delegate_p the optional label provider to which behavior is delegated
    */
+  public DelegatingLabelProvider(ILabelProvider delegate_p) {
+    setDelegate(delegate_p);
+  }
+  
+  /**
+   * @see org.eclipse.jface.viewers.ColumnLabelProvider#getFont(java.lang.Object)
+   */
+  @Override
   public Font getFont(Object element_p) {
     Font result = null;
     if (_delegate instanceof IFontProvider)
@@ -55,8 +63,9 @@ implements IFontProvider, IColorProvider {
   }
   
   /**
-   * @see org.eclipse.jface.viewers.IColorProvider#getBackground(java.lang.Object)
+   * @see org.eclipse.jface.viewers.ColumnLabelProvider#getBackground(java.lang.Object)
    */
+  @Override
   public Color getBackground(Object element_p) {
     Color result = null;
     if (_delegate instanceof IColorProvider)
@@ -65,16 +74,25 @@ implements IFontProvider, IColorProvider {
   }
   
   /**
+   * Return the default delegate
+   * @return a non-null label provider
+   */
+  protected ILabelProvider getDefaultDelegate() {
+    return DiffMergeLabelProvider.getInstance();
+  }
+  
+  /**
    * Return the label provider to which behavior is delegated
    * @return a non-null label provider
    */
-  protected ILabelProvider getDelegate() {
+  public ILabelProvider getDelegate() {
     return _delegate;
   }
   
   /**
-   * @see org.eclipse.jface.viewers.IColorProvider#getForeground(java.lang.Object)
+   * @see org.eclipse.jface.viewers.ColumnLabelProvider#getForeground(java.lang.Object)
    */
+  @Override
   public Color getForeground(Object element_p) {
     Color result = null;
     if (_delegate instanceof IColorProvider)
@@ -96,6 +114,16 @@ implements IFontProvider, IColorProvider {
   @Override
   public String getText(Object element_p) {
     return _delegate.getText(element_p);
+  }
+  
+  /**
+   * Set the delegate of this label provider (null for default)
+   * @param delegate_p a potentially null label provider
+   */
+  public void setDelegate(ILabelProvider delegate_p) {
+    _delegate = delegate_p;
+    if (_delegate == null)
+      _delegate = getDefaultDelegate();
   }
   
 }

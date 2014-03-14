@@ -14,7 +14,7 @@
             id="org.eclipse.emf.diffmerge.ui.compareWithEachOther"
             objectClass="org.eclipse.core.resources.IFile">
          <action
-               class="org.eclipse.emf.diffmerge.ui.actions.CompareModelsAction"
+               class="org.eclipse.emf.diffmerge.ui.setup.CompareModelsAction"
                enablesFor="2+"
                id="org.eclipse.emf.diffmerge.ui.compareFilesAction"
                label="Each Other as models"
@@ -24,17 +24,24 @@
    </extension>
    <extension
          point="org.eclipse.emf.diffmerge.ui.modelComparisonContext">
-      <comparisonScope
-            scopeFactory="org.eclipse.emf.diffmerge.ui.specification.ext.FileScopeSpecificationFactory">
-      </comparisonScope>
-      <comparisonScope
-            scopeFactory="org.eclipse.emf.diffmerge.ui.specification.ext.ResourceScopeSpecificationFactory">
-      </comparisonScope>
-      <comparisonScope
-            scopeFactory="org.eclipse.emf.diffmerge.ui.specification.ext.EObjectScopeSpecificationFactory">
-      </comparisonScope>
-      <comparisonSpecification
-            specificationFactory="org.eclipse.emf.diffmerge.ui.specification.ext.DefaultComparisonSpecificationFactory">
-      </comparisonSpecification>
+      <scopeDefinition
+            factory="org.eclipse.emf.diffmerge.ui.specification.ext.URIScopeDefinitionFactory">
+      </scopeDefinition>
+      <scopeDefinition
+            factory="org.eclipse.emf.diffmerge.ui.specification.ext.ResourceScopeDefinitionFactory">
+      </scopeDefinition>
+      <comparisonMethod
+            factory="org.eclipse.emf.diffmerge.ui.specification.ext.ConfigurableComparisonMethodFactory">
+      </comparisonMethod>
+   </extension>
+   <extension
+         point="org.eclipse.core.runtime.adapters">
+      <factory
+            adaptableType="org.eclipse.ui.IReusableEditor"
+            class="org.eclipse.emf.diffmerge.ui.setup.CompareEditorAdapterFactory">
+         <adapter
+               type="org.eclipse.ui.views.properties.IPropertySheetPage">
+         </adapter>
+      </factory>
    </extension>
 </plugin>

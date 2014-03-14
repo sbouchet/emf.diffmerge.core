@@ -20,15 +20,15 @@ import org.eclipse.emf.ecore.resource.Resource;
 
 
 /**
- * A model scope which is aware of the physical, potentially fragmented storage
- * of its elements.
- * Resources are assumed to be organized in an acyclic "inclusion" graph derived
- * from the containment tree, with additional "referencing" arcs.
- * The "holding" resource defined in the super-interface must be one of those
- * resources.
+ * A model scope which is aware of its underlying multi-resource persistence
+ * structure. Resources are assumed to be organized in an acyclic "inclusion"
+ * graph derived from the containment tree, with additional "referencing" arcs
+ * that manifest the existence of at least one cross-reference between elements
+ * of two resources. The "holding" resource defined in the super-interface must
+ * be one of the resources.
  * @author Olivier Constant
  */
-public interface IFragmentedModelScope extends IPhysicalModelScope {
+public interface IFragmentedModelScope extends IPersistentModelScope {
   
   /**
    * Return the list of the resources containing elements which belong to
@@ -63,5 +63,20 @@ public interface IFragmentedModelScope extends IPhysicalModelScope {
    * @return a non-null, potentially empty list
    */
   List<Resource> getRootResources();
+  
+  /**
+   * Return whether the scope has been fully explored. While true, the result of the methods
+   * related to resources remains identical.
+   * Invariant: isFullyExplored() implies isLoaded()
+   */
+  boolean isFullyExplored();
+  
+  
+  /**
+   * An IFragmentedModelScope which can be modified.
+   */
+  public static interface Editable extends IPersistentModelScope.Editable {
+    // Nothing more
+  }
   
 }

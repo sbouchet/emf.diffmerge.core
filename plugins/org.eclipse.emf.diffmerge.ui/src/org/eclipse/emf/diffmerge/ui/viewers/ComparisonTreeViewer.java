@@ -21,15 +21,17 @@ import java.util.List;
 
 import org.eclipse.emf.diffmerge.api.IComparison;
 import org.eclipse.emf.diffmerge.api.IMatch;
+import org.eclipse.emf.diffmerge.api.IPureMatch;
 import org.eclipse.emf.diffmerge.api.Role;
 import org.eclipse.emf.diffmerge.diffdata.EMatch;
 import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin;
 import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin.DifferenceColorKind;
+import org.eclipse.emf.diffmerge.ui.Messages;
 import org.eclipse.emf.diffmerge.ui.util.DelegatingLabelProvider;
-import org.eclipse.emf.diffmerge.ui.util.DiffMergeLabelProvider;
 import org.eclipse.emf.diffmerge.ui.util.DifferenceKind;
 import org.eclipse.emf.diffmerge.ui.util.UIUtil;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.jface.viewers.ColumnViewerToolTipSupport;
 import org.eclipse.jface.viewers.ITreePathContentProvider;
 import org.eclipse.jface.viewers.ITreePathLabelProvider;
 import org.eclipse.jface.viewers.ITreeSelection;
@@ -45,10 +47,9 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 
 
-
 /**
  * A viewer which provides a representation of the model tree of a given comparison.
- * Input: ModelComparisonDiffNode ; Elements: IMatch.
+ * Input: EMFDiffNode ; Elements: IMatch.
  * @author Olivier Constant
  */
 public class ComparisonTreeViewer extends TreeViewer {
@@ -70,6 +71,7 @@ public class ComparisonTreeViewer extends TreeViewer {
     super(parent_p, style_p);
     setContentProvider(new ContentProvider());
     setLabelProvider(new LabelProvider());
+    ColumnViewerToolTipSupport.enableFor(this);
     getControl().setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
   }
   
@@ -93,8 +95,8 @@ public class ComparisonTreeViewer extends TreeViewer {
    * @see org.eclipse.jface.viewers.ContentViewer#getInput()
    */
   @Override
-  public ModelComparisonDiffNode getInput() {
-    return (ModelComparisonDiffNode)super.getInput();
+  public EMFDiffNode getInput() {
+    return (EMFDiffNode)super.getInput();
   }
   
   /**
@@ -342,7 +344,7 @@ public class ComparisonTreeViewer extends TreeViewer {
   
   
   /**
-   * The content provider for this viewer
+   * The content provider for this viewer.
    */
   protected class ContentProvider implements ITreePathContentProvider {
     
@@ -372,7 +374,7 @@ public class ComparisonTreeViewer extends TreeViewer {
      * @see org.eclipse.jface.viewers.ITreeContentProvider#getElements(java.lang.Object)
      */
     public Object[] getElements(Object inputElement_p) {
-      ModelComparisonDiffNode input = (ModelComparisonDiffNode)inputElement_p;
+      EMFDiffNode input = (EMFDiffNode)inputElement_p;
       List<IMatch> result = input.getActualComparison().getContents();
       return result.toArray();
     }
@@ -402,16 +404,9 @@ public class ComparisonTreeViewer extends TreeViewer {
   
   
   /**
-   * The label provider for this viewer
+   * The label provider for this viewer.
    */
   protected class LabelProvider extends DelegatingLabelProvider implements ITreePathLabelProvider {
-    
-    /**
-     * Constructor
-     */
-    public LabelProvider() {
-      super(DiffMergeLabelProvider.getInstance());
-    }
     
     /**
      * Return the element to represent for the given match
@@ -449,7 +444,7 @@ public class ComparisonTreeViewer extends TreeViewer {
       DifferenceKind kind = getInput().getDifferenceKind(match);
       DifferenceColorKind colorKind =
         EMFDiffMergeUIPlugin.getDefault().getDifferenceColorKind(kind);
-      return EMFDiffMergeUIPlugin.getDefault().getDifferenceColor(colorKind);
+      return getInput().getDifferenceColor(colorKind);
     }
     
     /**
@@ -507,19 +502,8 @@ public class ComparisonTreeViewer extends TreeViewer {
     private String getPathText(TreePath path_p) {
       String result = null;
       IMatch last = (IMatch)path_p.getLastSegment();
-      if (last != null) {
+      if (last != null)
         result = getText(last);
-//        if (usesCustomLabels() && last.isAMove()) {
-//          String prefix;
-//          if (getInput().representAsMoveOrigin(path_p))
-//            prefix = "«"; //$NON-NLS-1$
-//          else
-//            prefix = "»"; //$NON-NLS-1$
-//          if (!getInput().representAsModification(last))
-//            prefix = prefix + " "; //$NON-NLS-1$
-//          result = prefix + result;
-//        }
-      }
       return result;
     }
     
@@ -538,6 +522,22 @@ public class ComparisonTreeViewer extends TreeViewer {
       int nb = getInput().getUIDifferenceNumber(match);
       if (nb > 0)
         result = result + " (" + nb + ")"; //$NON-NLS-1$ //$NON-NLS-2$
+      return result;
+    }
+    
+    /**
+     * @see org.eclipse.jface.viewers.CellLabelProvider#getToolTipText(java.lang.Object)
+     */
+    @Override
+    public String getToolTipText(Object element_p) {
+      String result = null;
+      if (element_p instanceof IPureMatch) {
+        Object matchID = ((IPureMatch)element_p).getMatchID();
+        if (matchID != null) {
+          String matchIDText = matchID.toString();
+          result = Messages.ComparisonTreeViewer_MatchIDTooltip + matchIDText;
+        }
+      }
       return result;
     }
     

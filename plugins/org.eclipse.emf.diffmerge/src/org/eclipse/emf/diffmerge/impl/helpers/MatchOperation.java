@@ -15,16 +15,20 @@
 package org.eclipse.emf.diffmerge.impl.helpers;
 
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
-import org.eclipse.emf.diffmerge.EMFDiffMergePlugin;
 import org.eclipse.emf.diffmerge.Messages;
 import org.eclipse.emf.diffmerge.api.IComparison;
 import org.eclipse.emf.diffmerge.api.IMapping;
+import org.eclipse.emf.diffmerge.api.IMatch;
 import org.eclipse.emf.diffmerge.api.IMatchPolicy;
 import org.eclipse.emf.diffmerge.api.Role;
 import org.eclipse.emf.diffmerge.api.scopes.IModelScope;
@@ -41,51 +45,85 @@ public class MatchOperation extends AbstractExpensiveOperation {
   private final IMatchPolicy _policy;
   
   /** The non-null comparison whose mapping is being built */
-  private final IComparison _comparison;
+  private final IComparison.Editable _comparison;
+  
+  /** The optional map from roles to sets of duplicate match IDs */
+  protected final Map<Role, Set<Object>> _duplicateIDs;
+  
+  /** Duplicate IDs in role 1 which may have an impact on the mapping */
+  protected final Set<Object> _duplicateCandidatesRole1;
+  
+  /** Duplicate IDs in role 2 which may have an impact on the mapping */
+  protected final Set<Object> _duplicateCandidatesRole2;
   
   
   /**
    * Constructor
    * @param comparison_p a non-null comparison whose mapping is to be built
    * @param policy_p a non-null match policy
+   * @param duplicateIDs_p an optional map that associates each role with an empty,
+   *          modifiable set of duplicate match IDs, to be filled by this operation
    */
-  public MatchOperation(IComparison comparison_p, IMatchPolicy policy_p) {
+  public MatchOperation(IComparison.Editable comparison_p, IMatchPolicy policy_p,
+      Map<Role, Set<Object>> duplicateIDs_p) {
     super();
     _comparison = comparison_p;
     _policy = policy_p;
+    _duplicateIDs = duplicateIDs_p;
+    _duplicateCandidatesRole1 = new HashSet<Object>(0);
+    _duplicateCandidatesRole2 = new HashSet<Object>(0);
+  }
+  
+  /**
+   * Create and return a new (match ID, element) empty map 
+   * @return a non-null map
+   */
+  protected Map<Object, EObject> createMatchIDToElementMap() {
+    Map<Object, EObject> result;
+    @SuppressWarnings("unchecked") // No issue if properly defined, see IMatchPolicy
+    Comparator<Object> comparator =
+      (Comparator<Object>)getMatchPolicy().getMatchIDComparator();
+    if (comparator == null)
+      result = new HashMap<Object, EObject>();
+    else
+      result = new TreeMap<Object, EObject>(comparator);
+    return result;
   }
   
   /**
    * Explore the scope of the given role and fill the mapping with its elements,
    * not attempting to match them
    * @param role_p a non-null role
-   * @param rememberIds_p whether match IDs must be remembered and returned in a map
-   * @return an unmodifiable map of (criterion, element) with no null value and which is empty if !rememberIds_p
+   * @param fillIDMap_p whether match IDs must be remembered and returned in a map
+   * @return an unmodifiable map of (criterion, element) with no null value and which is empty if !rememberIDs_p
    */
-  protected Map<Comparable<?>, EObject> explore(Role role_p, boolean rememberIds_p) {
-    Map<Comparable<?>, EObject> result;
-    if (rememberIds_p)
-      // Use the natural ordering of comparables in the TreeMap
-      result = new TreeMap<Comparable<?>, EObject>();
+  protected Map<Object, EObject> explore(Role role_p, boolean fillIDMap_p) {
+    Map<Object, EObject> result;
+    if (fillIDMap_p)
+      result = createMatchIDToElementMap();
     else
       result = Collections.emptyMap();
     IModelScope scope = _comparison.getScope(role_p);
+    boolean rememberMatchIDs = getMatchPolicy().keepMatchIDs();
     if (scope != null) {
       // Explore the scope, marking its elements as unmatched
       // and registering their match IDs
       Iterator<EObject> it = scope.getAllContents();
-      IMapping.Editable mapping = (IMapping.Editable)_comparison.getMapping();
+      IMapping.Editable mapping = _comparison.getMapping();
       while (it.hasNext()) {
         checkProgress();
         EObject current = it.next();
-        mapping.map(current, role_p);
-        if (rememberIds_p) {
-          Comparable<?> id = getMatchPolicy().getMatchId(current, scope);
-          if (id != null) {
-            EObject squatter = result.put(id, current);
-            if (squatter != null)
-              EMFDiffMergePlugin.getDefault().warn(
-                  Messages.MatchBuilder_WarningDuplicateIDs + id);
+        IMatch.Editable match = mapping.map(current, role_p);
+        if (rememberMatchIDs || fillIDMap_p) {
+          Object matchID = getMatchPolicy().getMatchID(current, scope);
+          if (matchID != null) {
+            if (rememberMatchIDs)
+              match.setMatchID(matchID);
+            if (fillIDMap_p) {
+              EObject squatter = result.put(matchID, current);
+              if (squatter != null && _duplicateIDs != null)
+                _duplicateCandidatesRole1.add(matchID);
+            }
           }
         }
       }
@@ -102,46 +140,59 @@ public class MatchOperation extends AbstractExpensiveOperation {
    * @param secondaryRole1_p a non-null role which is different from role_p
    * @param idRegistry2_p a potentially null map of (ID, element)
    * @param secondaryRole2_p a role which is different from role_p and secondaryRole1_p
-   *        and which is null iff IdRegistry2_p is null
-   * @param rememberIds_p whether match IDs must be remembered and returned in a map
-   * @return an unmodifiable map of (ID, element) with no null value and which is empty if !rememberIds_p
+   *        and which is null iff idRegistry2_p is null
+   * @param fillIDMap_p whether match IDs must be remembered and returned in a map
+   * @return an unmodifiable map of (ID, element) with no null value and which is empty if !rememberIDs_p
    */
-  protected Map<Comparable<?>, EObject> exploreAndMatch(Role role_p,
-      Map<Comparable<?>, EObject> idRegistry1_p, Role secondaryRole1_p,
-      Map<Comparable<?>, EObject> idRegistry2_p, Role secondaryRole2_p,
-      boolean rememberId_p) {
-    Map<Comparable<?>, EObject> result;
-    if (rememberId_p)
-      // Use the ordering of Comparables in the TreeMap
-      result = new TreeMap<Comparable<?>, EObject>();
+  protected Map<Object, EObject> exploreAndMatch(Role role_p,
+      Map<Object, EObject> idRegistry1_p, Role secondaryRole1_p,
+      Map<Object, EObject> idRegistry2_p, Role secondaryRole2_p,
+      boolean fillIDMap_p) {
+    Map<Object, EObject> result;
+    if (fillIDMap_p)
+      result = createMatchIDToElementMap();
     else
       result = Collections.emptyMap();
     IModelScope scope = _comparison.getScope(role_p);
+    boolean rememberMatchIDs = getMatchPolicy().keepMatchIDs();
     if (scope != null) {
       Iterator<EObject> targetIt = scope.getAllContents();
-      IMapping.Editable mapping = (IMapping.Editable)_comparison.getMapping();
+      IMapping.Editable mapping = _comparison.getMapping();
       while (targetIt.hasNext()) {
         checkProgress();
         EObject current = targetIt.next();
         EObject counterpart1 = null;
         EObject counterpart2 = null;
-        Comparable<?> id = getMatchPolicy().getMatchId(current, scope);
-        if (id != null) {
-          if (rememberId_p) {
-            EObject squatter = result.put(id, current);
-            if (squatter != null)
-              EMFDiffMergePlugin.getDefault().warn(
-                  Messages.MatchBuilder_WarningDuplicateIDs + id);
+        Object matchID = getMatchPolicy().getMatchID(current, scope);
+        if (matchID != null) {
+          if (fillIDMap_p) {
+            EObject squatter = result.put(matchID, current);
+            if (squatter != null && _duplicateIDs != null)
+              _duplicateCandidatesRole2.add(matchID);
           }
-          counterpart1 = idRegistry1_p.get(id);
-          counterpart2 = idRegistry2_p != null? idRegistry2_p.get(id): null;
+          counterpart1 = idRegistry1_p.get(matchID);
+          counterpart2 = idRegistry2_p != null? idRegistry2_p.get(matchID): null;
         }
-        if (counterpart1 != null)
-          mapping.mapIncrementally(current, role_p, counterpart1, secondaryRole1_p);
-        if (counterpart2 != null)
-          mapping.mapIncrementally(current, role_p, counterpart2, secondaryRole2_p);
-        if (counterpart1 == null && counterpart2 == null)
-          mapping.map(current, role_p);
+        if (counterpart1 == null && counterpart2 == null) {
+          IMatch.Editable match = (IMatch.Editable)mapping.map(current, role_p);
+          if (rememberMatchIDs)
+            match.setMatchID(matchID);
+        } else {
+          boolean contradiction = false;
+          if (counterpart1 != null) {
+            if (_duplicateCandidatesRole1.contains(matchID) && _duplicateIDs != null)
+              _duplicateIDs.get(secondaryRole1_p).add(matchID);
+            contradiction = mapping.mapIncrementally(current, role_p, counterpart1, secondaryRole1_p);
+          }
+          if (counterpart2 != null) {
+            if (_duplicateCandidatesRole2.contains(matchID) && _duplicateIDs != null)
+              _duplicateIDs.get(secondaryRole2_p).add(matchID);
+            contradiction = contradiction ||
+              mapping.mapIncrementally(current, role_p, counterpart2, secondaryRole2_p);
+          }
+          if (contradiction && _duplicateIDs != null)
+            _duplicateIDs.get(role_p).add(matchID); // matchID cannot be null since current was matched
+        }
       }
     }
     return result;
@@ -159,7 +210,7 @@ public class MatchOperation extends AbstractExpensiveOperation {
    * Return the comparison which is being built
    * @return a non-null comparison
    */
-  public IComparison getOutput() {
+  public IComparison.Editable getComparison() {
     return _comparison;
   }
   
@@ -187,17 +238,19 @@ public class MatchOperation extends AbstractExpensiveOperation {
   protected void match() {
     boolean threeWay = _comparison.isThreeWay();
     getMonitor().subTask(Messages.MatchBuilder_Task_RegisteringIDs);
-    Map<Comparable<?>, EObject> referenceIdRegistry = explore(Role.REFERENCE, true);
+    Map<Object, EObject> referenceIDRegistry = explore(Role.REFERENCE, true);
     getMonitor().worked(1);
     getMonitor().subTask(Messages.MatchBuilder_Task_MappingIDs);
-    Map<Comparable<?>, EObject> targetIdRegistry = exploreAndMatch(
-        Role.TARGET, referenceIdRegistry, Role.REFERENCE, null, null, threeWay);
+    Map<Object, EObject> targetIDRegistry = exploreAndMatch(
+        Role.TARGET, referenceIDRegistry, Role.REFERENCE, null, null, threeWay);
     getMonitor().worked(1);
     if (threeWay) {
-      exploreAndMatch(Role.ANCESTOR, referenceIdRegistry, Role.REFERENCE,
-          targetIdRegistry, Role.TARGET, false);
+      exploreAndMatch(Role.ANCESTOR, referenceIDRegistry, Role.REFERENCE,
+          targetIDRegistry, Role.TARGET, false);
       getMonitor().worked(1);
     }
+    _duplicateCandidatesRole1.clear();
+    _duplicateCandidatesRole2.clear();
   }
   
   /**
@@ -207,7 +260,7 @@ public class MatchOperation extends AbstractExpensiveOperation {
   public IStatus run() {
     getMonitor().worked(1);
     match();
-    IMapping.Editable mapping = (IMapping.Editable)_comparison.getMapping(); //OCO
+    IMapping.Editable mapping = _comparison.getMapping();
     mapping.crossReference(Role.TARGET);
     getMonitor().worked(1);
     mapping.crossReference(Role.REFERENCE);

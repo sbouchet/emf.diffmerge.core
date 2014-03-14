@@ -22,6 +22,7 @@ import org.eclipse.emf.diffmerge.api.IMapping;
 import org.eclipse.emf.diffmerge.api.IMatch;
 import org.eclipse.emf.diffmerge.api.IMergePolicy;
 import org.eclipse.emf.diffmerge.api.Role;
+import org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope;
 import org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
@@ -49,7 +50,7 @@ public class UnidirectionalComparisonCopier extends EcoreUtil.Copier {
   protected IFeaturedModelScope _sourceScope;
   
   /** The initially null target scope for this copier */
-  protected IFeaturedModelScope _destinationScope;
+  protected IEditableModelScope _destinationScope;
   
   /** The potentially null merge policy to apply */
   protected IMergePolicy _mergePolicy;
@@ -97,16 +98,16 @@ public class UnidirectionalComparisonCopier extends EcoreUtil.Copier {
    * @param comparison_p a non-null comparison
    * @return a non-null element which is a clone of the element in partialMatch_p
    */
-  public EObject completeMatch(IMatch partialMatch_p, IComparison comparison_p) {
+  public EObject completeMatch(IMatch partialMatch_p, IComparison.Editable comparison_p) {
     assert partialMatch_p.getUncoveredRole() == _sourceRole.opposite() &&
     getCompletedMatches().contains(partialMatch_p);
     setComparison(comparison_p);
     EObject element = partialMatch_p.get(_sourceRole);
     EObject result = copy(element);
     assert result != null;
-    IMatch updatedMatch = _mapping.mapIncrementally(
+    _mapping.mapIncrementally(
         element, _sourceRole, result, _sourceRole.opposite());
-    getCompletedMatches().add(updatedMatch);
+    getCompletedMatches().add(_mapping.getMatchFor(element, _sourceRole));
     return result;
   }
   
@@ -114,7 +115,7 @@ public class UnidirectionalComparisonCopier extends EcoreUtil.Copier {
    * Complete the references between all completed elements
    * @param comparison_p a non-null comparison defining a behavioral context
    */
-  public void completeReferences(IComparison comparison_p) {
+  public void completeReferences(IComparison.Editable comparison_p) {
     setComparison(comparison_p);
     copyReferences();
   }
@@ -147,11 +148,14 @@ public class UnidirectionalComparisonCopier extends EcoreUtil.Copier {
   public void copyReferences() {
     for (IMatch updatedMatch : getCompletedMatches())
       copyReferences(updatedMatch);
-    // Update of containments may have changed resources, which may impact on IDs
+    // Update of containments may have changed resources, which may have an impact on IDs
     if (_mergePolicy != null) {
-      for (IMatch updatedMatch : getCompletedMatches())
-        _mergePolicy.copyId(
-            updatedMatch.get(_sourceRole), updatedMatch.get(_sourceRole.opposite()));
+      for (IMatch updatedMatch : getCompletedMatches()) {
+        EObject source = updatedMatch.get(_sourceRole);
+        EObject target = updatedMatch.get(_sourceRole.opposite());
+        BidirectionalComparisonCopier.handleIDCopy(
+            source, _sourceScope, target, _destinationScope, _mergePolicy);
+      }
     }
   }
   
@@ -214,7 +218,7 @@ public class UnidirectionalComparisonCopier extends EcoreUtil.Copier {
    * @param feature_p a non-null feature
    */
   protected boolean coverFeature(EStructuralFeature feature_p) {
-    return _mergePolicy != null && _mergePolicy.copyFeature(feature_p);
+    return _mergePolicy != null && _mergePolicy.copyFeature(feature_p, _destinationScope);
   }
   
   /**
@@ -256,13 +260,14 @@ public class UnidirectionalComparisonCopier extends EcoreUtil.Copier {
    * Set the comparison which defines the behavioral context of this copier
    * @param comparison_p a non-null comparison
    */
-  protected void setComparison(IComparison comparison_p) {
-    _mapping = (IMapping.Editable)comparison_p.getMapping();
+  protected void setComparison(IComparison.Editable comparison_p) {
+    _mapping = comparison_p.getMapping();
     _sourceScope = comparison_p.getScope(_sourceRole);
     _destinationScope = comparison_p.getScope(_sourceRole.opposite());
     _mergePolicy = comparison_p.getLastMergePolicy();
     if (_mergePolicy != null)
-      useOriginalReferences = _mergePolicy.copyOutOfScopeCrossReferences();
+      useOriginalReferences = _mergePolicy.copyOutOfScopeCrossReferences(
+          _sourceScope, _destinationScope);
   }
   
 }

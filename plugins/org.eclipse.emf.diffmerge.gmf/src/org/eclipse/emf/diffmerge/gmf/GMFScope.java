@@ -14,18 +14,20 @@
  */
 package org.eclipse.emf.diffmerge.gmf;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.diffmerge.impl.scopes.FragmentedModelScope;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.edit.domain.EditingDomain;
 import org.eclipse.gmf.runtime.emf.core.resources.GMFResource;
 import org.eclipse.gmf.runtime.notation.NotationPackage;
 import org.eclipse.gmf.runtime.notation.View;
@@ -43,10 +45,22 @@ public class GMFScope extends FragmentedModelScope {
   
   /**
    * Constructor
-   * @param resource_p a non-null resource
+   * @param uri_p a non-null URI of the resource to load as root
+   * @param editingDomain_p a non-null editing domain that encompasses the scope
+   * @param readOnly_p whether the scope should be read-only, if supported
    */
-  public GMFScope(Resource resource_p) {
-    super(resource_p);
+  public GMFScope(URI uri_p, EditingDomain editingDomain_p, boolean readOnly_p) {
+    super(uri_p, editingDomain_p, readOnly_p);
+  }
+  
+  /**
+   * Constructor
+   * @param uri_p a non-null resource URI
+   * @param resourceSet_p a non-null resource set
+   * @param readOnly_p whether the scope is in read-only mode, if applicable
+   */
+  public GMFScope(URI uri_p, ResourceSet resourceSet_p, boolean readOnly_p) {
+    super(uri_p, resourceSet_p, readOnly_p);
   }
   
   /**
@@ -98,7 +112,7 @@ public class GMFScope extends FragmentedModelScope {
    */
   @Override
   protected Collection<EReference> getCrossReferencesInScope(EObject element_p) {
-    List<EReference> result = new ArrayList<EReference>();
+    Collection<EReference> result = super.getCrossReferencesInScope(element_p);
     if (element_p instanceof View)
       result.add(NotationPackage.eINSTANCE.getView_Element());
     return result;

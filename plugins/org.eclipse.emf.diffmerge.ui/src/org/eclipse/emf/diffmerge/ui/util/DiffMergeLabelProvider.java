@@ -21,10 +21,10 @@ import org.eclipse.emf.diffmerge.api.diff.IDifference;
 import org.eclipse.emf.diffmerge.api.diff.IElementPresence;
 import org.eclipse.emf.diffmerge.api.diff.IPresenceDifference;
 import org.eclipse.emf.diffmerge.api.diff.IValuePresence;
-import org.eclipse.emf.diffmerge.api.scopes.IPhysicalModelScope;
+import org.eclipse.emf.diffmerge.impl.scopes.AbstractModelScope;
 import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin;
-import org.eclipse.emf.diffmerge.ui.Messages;
 import org.eclipse.emf.diffmerge.ui.EMFDiffMergeUIPlugin.ImageID;
+import org.eclipse.emf.diffmerge.ui.Messages;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
@@ -178,9 +178,9 @@ public class DiffMergeLabelProvider extends LabelProvider {
   @Override
   public Image getImage(Object element_p) {
     Object element = element_p;
-    if (element instanceof IPhysicalModelScope)
-      element = ((IPhysicalModelScope)element).getHoldingResource();
-    Image result = UIUtil.getImage(element);
+    if (element instanceof AbstractModelScope)
+      element = ((AbstractModelScope)element).getOriginator();
+    Image result = UIUtil.getEMFImage(element);
     if (result == null)
       result = EMFDiffMergeUIPlugin.getDefault().getImage(ImageID.EMPTY);
     return result;
@@ -215,12 +215,12 @@ public class DiffMergeLabelProvider extends LabelProvider {
   public String getText(Object element_p) {
     Object element = element_p;
     String result;
-    if (element instanceof IPhysicalModelScope)
-      element = ((IPhysicalModelScope)element).getHoldingResource();
+    if (element instanceof AbstractModelScope)
+      element = ((AbstractModelScope)element).getOriginator();
     if (element instanceof EObject)
-      result = UIUtil.getText(element);
+      result = UIUtil.getEMFText(element);
     else if (element instanceof Resource)
-      result = UIUtil.simplifyURI(((Resource)element).getURI().toString());
+      result = UIUtil.simplifyURI(((Resource)element).getURI());
     else if (element instanceof IFile)
       result = ((IFile)element).getFullPath().toPortableString();
     else {

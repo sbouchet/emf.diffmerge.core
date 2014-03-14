@@ -16,7 +16,10 @@ package org.eclipse.emf.diffmerge.impl.helpers;
 
 import org.eclipse.emf.diffmerge.api.IMapping;
 import org.eclipse.emf.diffmerge.api.IMatch;
+import org.eclipse.emf.diffmerge.api.IMergePolicy;
 import org.eclipse.emf.diffmerge.api.Role;
+import org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope;
+import org.eclipse.emf.diffmerge.api.scopes.IPersistentModelScope;
 import org.eclipse.emf.ecore.EObject;
 
 
@@ -51,7 +54,7 @@ public class BidirectionalComparisonCopier {
    * @param partialMatch_p a non-null partial match
    * @return a non-null element which is a clone of the element in partialMatch_p
    */
-  public EObject completeMatch(IMapping mapping_p, IMatch partialMatch_p) {
+  public EObject completeMatch(IMapping.Editable mapping_p, IMatch partialMatch_p) {
     assert partialMatch_p.isPartial();
     Role sourceRole = partialMatch_p.getUncoveredRole().opposite();
     UnidirectionalComparisonCopier involvedCopier =
@@ -67,11 +70,32 @@ public class BidirectionalComparisonCopier {
    * @param mapping_p a non-null mapping
    * @param role_p a role which is TARGET or REFERENCE
    */
-  public void completeReferences(IMapping mapping_p, Role role_p) {
+  public void completeReferences(IMapping.Editable mapping_p, Role role_p) {
     UnidirectionalComparisonCopier involvedCopier =
       (role_p == Role.TARGET)? _referenceToTargetCopier:
         _targetToReferenceCopier;
     involvedCopier.completeReferences(mapping_p.getComparison());
+  }
+  
+  /**
+   * Handle ID copy for the given target element from the given target scope
+   * according to the given source element from the given source scope and
+   * the given merge policy
+   * @param source_p a non-null element
+   * @param sourceScope_p a non-null scope
+   * @param target_p a non-null element
+   * @param targetScope_p a non-null scope
+   * @param mergePolicy_p a non-null merge policy
+   */
+  public static void handleIDCopy(EObject source_p, IFeaturedModelScope sourceScope_p,
+      EObject target_p, IFeaturedModelScope targetScope_p, IMergePolicy mergePolicy_p) {
+    if (mergePolicy_p.copyExtrinsicIDs(sourceScope_p, targetScope_p) &&
+        sourceScope_p instanceof IPersistentModelScope &&
+        targetScope_p instanceof IPersistentModelScope.Editable) {
+      Object extrinsicID = ((IPersistentModelScope)sourceScope_p).getExtrinsicID(source_p);
+      ((IPersistentModelScope.Editable)targetScope_p).setExtrinsicID(target_p, extrinsicID);
+    }
+    mergePolicy_p.setIntrinsicID(source_p, sourceScope_p, target_p, targetScope_p);
   }
   
 }

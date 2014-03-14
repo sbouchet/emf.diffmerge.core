@@ -20,18 +20,16 @@ import java.util.List;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.AbstractTreeIterator;
-import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope;
+import org.eclipse.emf.diffmerge.api.scopes.IPersistentModelScope;
+import org.eclipse.emf.diffmerge.util.ModelImplUtil;
 import org.eclipse.emf.diffmerge.util.structures.FHashSet;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
-import org.eclipse.emf.ecore.EStructuralFeature;
-import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.util.FeatureMapUtil;
 import org.eclipse.emf.ecore.util.InternalEList;
-
 
 
 /**
@@ -39,38 +37,6 @@ import org.eclipse.emf.ecore.util.InternalEList;
  * @author Olivier Constant
  */
 public abstract class AbstractModelScope implements IFeaturedModelScope {
-  
-  /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#add(EObject, EAttribute, Object)
-   */
-  public boolean add(EObject source_p, EAttribute attribute_p, Object value_p) {
-    boolean result;
-    if (FeatureMapUtil.isMany(source_p, attribute_p)) {
-      @SuppressWarnings("unchecked")
-      List<Object> values = (List<Object>)source_p.eGet(attribute_p, resolveProxies());
-      result = values.add(value_p);
-    } else {
-      source_p.eSet(attribute_p, value_p);
-      result = true;
-    }
-    return result;
-  }
-  
-  /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#add(EObject, EReference, EObject)
-   */
-  public boolean add(EObject source_p, EReference reference_p, EObject value_p) {
-    boolean result;
-    if (FeatureMapUtil.isMany(source_p, reference_p)) {
-      @SuppressWarnings("unchecked")
-      List<EObject> values = (List<EObject>)source_p.eGet(reference_p, resolveProxies());
-      result = values.add(value_p); // Guarantees uniqueness
-    } else {
-      source_p.eSet(reference_p, value_p);
-      result = true;
-    }
-    return result;
-  }
   
   /**
    * @see org.eclipse.emf.diffmerge.api.scopes.IModelScope#covers(EObject)
@@ -86,7 +52,7 @@ public abstract class AbstractModelScope implements IFeaturedModelScope {
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#get(EObject, EReference)
+   * @see org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope#get(EObject, EReference)
    */
   public List<EObject> get(EObject source_p, EReference reference_p) {
     return get(source_p, reference_p, resolveProxies());
@@ -126,7 +92,7 @@ public abstract class AbstractModelScope implements IFeaturedModelScope {
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#get(EObject, EAttribute)
+   * @see org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope#get(EObject, EAttribute)
    */
   @SuppressWarnings("unchecked")
   public List<Object> get(EObject source_p, EAttribute attribute_p) {
@@ -150,15 +116,15 @@ public abstract class AbstractModelScope implements IFeaturedModelScope {
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#getAllContents()
+   * @see org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope#getAllContents()
    */
   public TreeIterator<EObject> getAllContents() {
     // Return an iterator which is derived from getAllContents(EObject)
-    return new MultiRootTreeIterator(this, getContents().iterator());
+    return new ModelScopeIterator(this);
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#getAllContents(EObject)
+   * @see org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope#getAllContents(EObject)
    */
   @SuppressWarnings("serial")
   public TreeIterator<EObject> getAllContents(EObject root_p) {
@@ -193,84 +159,33 @@ public abstract class AbstractModelScope implements IFeaturedModelScope {
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#getContainment(EObject)
+   * @see org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope#getContainment(EObject)
    */
   public EReference getContainment(EObject element_p) {
     return element_p.eContainmentFeature();
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#getContents(EObject)
+   * @see org.eclipse.emf.diffmerge.api.scopes.IEditableModelScope#getContents(EObject)
    */
   public List<EObject> getContents(EObject element_p) {
     return element_p.eContents();
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#move(org.eclipse.emf.ecore.EObject, org.eclipse.emf.ecore.EStructuralFeature, int, int)
+   * @see IPersistentModelScope#getExtrinsicID(EObject)
    */
-  public Object move(EObject source_p, EStructuralFeature feature_p, int newPosition_p,
-      int oldPosition_p) {
-    Object result = null;
-    if (FeatureMapUtil.isMany(source_p, feature_p) && source_p.eIsSet(feature_p) &&
-        newPosition_p >= 0) {
-      @SuppressWarnings({ "unchecked", "rawtypes" })
-      EList<Object> values = (EList)source_p.eGet(feature_p, false);
-      int size = values.size();
-      int oldPosition = oldPosition_p >= 0? oldPosition_p: size-1;
-      int newPosition = oldPosition >= newPosition_p? newPosition_p:
-        newPosition_p-1;
-      if (newPosition < size && oldPosition < size) {
-        try {
-          result = values.move(newPosition, oldPosition);
-        } catch (RuntimeException e) {
-          // Move is not supported on this setting: return null
-        }
-      }
-    }
-    return result;
+  protected Object getExtrinsicID(EObject element_p) {
+    // Default implementation only covers XML/XMI Resources
+    return ModelImplUtil.getXMLID(element_p);
   }
   
   /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#remove(EObject)
+   * Return an object that characterizes or identifies this scope, if any
+   * @return a potentially null object
    */
-  public boolean remove(EObject element_p) {
-    // Warning: this implementation ignores cross-references from outside the scope
-    EcoreUtil.remove(element_p);
-    return true;
-  }
-  
-  /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#remove(EObject, EAttribute, Object)
-   */
-  public boolean remove(EObject source_p, EAttribute attribute_p, Object value_p) {
-    return removeValue(source_p, attribute_p, value_p);
-  }
-  
-  /**
-   * @see org.eclipse.emf.diffmerge.api.scopes.IFeaturedModelScope#remove(EObject, EReference, EObject)
-   */
-  public boolean remove(EObject source_p, EReference reference_p, EObject value_p) {
-    return removeValue(source_p, reference_p, value_p);
-  }
-  
-  /**
-   * Remove the given value on the given feature from the given element.
-   * @param source_p a non-null element
-   * @param feature_p a non-null feature
-   * @param value_p a non-null value
-   * @return whether the operation succeeded
-   */
-  protected boolean removeValue(EObject source_p, EStructuralFeature feature_p, Object value_p) {
-    boolean result = false;
-    // Differs from EcoreUtil.remove in the non-many case
-    if (FeatureMapUtil.isMany(source_p, feature_p)) {
-      result = ((List<?>)source_p.eGet(feature_p)).remove(value_p);
-    } else if (source_p.eGet(feature_p) == value_p) {
-      source_p.eUnset(feature_p);
-      result = true;
-    }
-    return result;
+  public Object getOriginator() {
+    return this;
   }
   
   /**
