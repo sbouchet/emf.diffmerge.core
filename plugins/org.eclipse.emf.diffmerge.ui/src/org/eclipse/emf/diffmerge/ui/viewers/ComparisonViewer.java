@@ -1394,7 +1394,7 @@ public class ComparisonViewer extends AbstractComparisonViewer {
    * Setup the menus of the synthesis viewer
    */
   @SuppressWarnings("unused")
-  protected void setupSynthesisMenus() {
+  protected Menu setupSynthesisMenus() {
     ToolBar synthesisToolBar = _synthesisModelTreeViewer.getToolbar();
     Menu synthesisMenu = UIUtil.createMenuTool(synthesisToolBar);
     // Show uncounted elements
@@ -1572,6 +1572,7 @@ public class ComparisonViewer extends AbstractComparisonViewer {
         }
       }
     });
+    return synthesisMenu;
   }
   
   /**
